@@ -1,0 +1,39 @@
+FROM node:22-alpine AS build
+
+WORKDIR /app
+
+# Install corepack et pnpm
+RUN npm i -g corepack@latest && corepack enable pnpm
+
+# Copy package.json first for cache
+COPY package*.json ./
+RUN pnpm install
+
+# Copy all the code
+COPY . .
+RUN pnpm build
+
+# --- Production stage ---
+FROM node:22-alpine AS prod
+
+WORKDIR /app
+
+# Install corepack et pnpm
+RUN npm i -g corepack@latest && corepack enable pnpm
+
+# Copie seulement le build et les deps prod
+COPY --from=build /app/.next ./.next
+COPY --from=build /app/public ./public
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/package*.json ./
+COPY --from=build /app/next.config.ts ./next.config.ts
+COPY --from=build /app/tsconfig.json ./tsconfig.json
+
+# Expose the port (aligned with docker-compose.yml)
+EXPOSE 8080
+ENV PORT=8080
+ENV HOSTNAME="0.0.0.0"
+
+USER node
+
+CMD ["pnpm", "start"]
